@@ -198,7 +198,7 @@ class AwqQuantizer:
             # [STEP 4]: Quantize weights
             if not self.export_compatible:
                 self._apply_quant(self.modules[i], named_linears)
-
+            self.modules[i].cpu()
             clear_memory()
 
     def pack(self):
@@ -246,8 +246,7 @@ class AwqQuantizer:
                 zeros=zeros,
             )
 
-            linear_layer.cpu()
-            q_linear.to(next(module.parameters()).device)
+            q_linear.cpu()
             set_op_by_name(module, name, q_linear)
             clear_memory()
 
@@ -296,6 +295,11 @@ class AwqQuantizer:
 
         # Put x on the right device
         inp = inp.to(next(module2inspect.parameters()).device)
+
+        # Put other on the right device
+        for key, value in kwargs.items():
+            if isinstance(value, torch.Tensor):
+                kwargs[key] = value.to(next(module2inspect.parameters()).device)
 
         # [STEP 1]: Compute per-channel mean of normalised weights
         # All layer weights are concatted together
@@ -627,6 +631,12 @@ class AwqQuantizer:
             named_linears = {
                 **named_linears,
                 "mlp": layer.mlp,
+            }
+
+        if self.awq_model.model_type == "telechat":
+            named_linears = {
+                **named_linears,
+                "post_attention_layernorm": layer.post_attention_layernorm, # inorder to get residual value
             }
 
         for name in named_linears:
