@@ -3,6 +3,7 @@ import gc
 import warnings
 import torch
 import transformers
+from transformers import AutoModelForCausalLM
 import torch.nn as nn
 
 from tqdm import tqdm
@@ -368,10 +369,16 @@ class BaseAWQForCausalLM(nn.Module):
             trust_remote_code=trust_remote_code,
             download_kwargs=download_kwargs,
         )
-
-        target_cls_name = TRANSFORMERS_AUTO_MAPPING_DICT[config.model_type]
-        target_cls = getattr(transformers, target_cls_name)
-
+        # Because telechat does not exist in the transformer library, it needs to be modified here
+        try:
+            target_cls_name = TRANSFORMERS_AUTO_MAPPING_DICT[config.model_type]
+            target_cls = getattr(transformers, target_cls_name)
+        except KeyError as e:
+            if config.model_type == "telechat":
+                target_cls_name = "TelechatForCausalLM"
+                target_cls = AutoModelForCausalLM
+            else:
+                raise e
         processor = None
         if target_cls_name == "AutoModelForVision2Seq":
             processor = AutoProcessor.from_pretrained(model_weights_path)
